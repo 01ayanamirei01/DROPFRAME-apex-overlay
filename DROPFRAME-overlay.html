@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DROPFRAME — Apex overlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --fg: #e8e2d8;
+      --muted: #9a9388;
+      --panel: rgba(11, 13, 16, 0.82);
+      --line: color-mix(in oklab, #e8e2d8 14%, transparent);
+      --ember: #ff4d1c;
+      --ember-fg: #140700;
+      --ok: #3dba7c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Manrope", sans-serif;
+    }
+    button, [role="button"] { cursor: pointer; }
+    button {
+      font: inherit;
+      border: 0;
+      background: var(--ember);
+      color: var(--ember-fg);
+      height: 44px;
+      padding: 0 16px;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+    button.ghost {
+      background: transparent;
+      color: var(--fg);
+      border: 1px solid var(--line);
+    }
+    button.danger { background: #c81d25; color: #fff5f4; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    input, select {
+      width: 100%;
+      height: 44px;
+      border: 1px solid var(--line);
+      background: #16191e;
+      color: var(--fg);
+      border-radius: 8px;
+      padding: 0 12px;
+      font: inherit;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    body.studio { display: flex; min-height: 100dvh; }
+    .dock {
+      width: 360px;
+      flex-shrink: 0;
+      padding: 20px;
+      background: #12151a;
+      border-right: 1px solid var(--line);
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .kicker { font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--ember); }
+    h1 { font-family: "Exo 2", sans-serif; font-size: 26px; font-weight: 600; }
+    .hint { font-size: 14px; color: var(--muted); line-height: 1.5; }
+    .readout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .cell {
+      border: 1px solid var(--line);
+      background: #101318;
+      padding: 10px 12px;
+    }
+    .cell span { display: block; font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--muted); }
+    .cell b { font-family: "Exo 2", sans-serif; font-size: 18px; font-weight: 600; letter-spacing: 0.08em; }
+    .raw {
+      font-size: 11px;
+      color: var(--muted);
+      max-height: 72px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+    .preview {
+      flex: 1;
+      min-width: 0;
+      display: grid;
+      place-items: center;
+      background: #07080a;
+    }
+    .stage-wrap {
+      width: min(100%, calc(100dvh * 16 / 9));
+      aspect-ratio: 16 / 9;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stage {
+      position: absolute;
+      inset: 0;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: top left;
+      font-family: "Exo 2", sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--fg);
+    }
+    .bg-video, .bg-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .veil { position: absolute; inset: 0; background: rgba(11,13,16,0.18); }
+    .corner {
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      border: 2px solid var(--ember);
+      pointer-events: none;
+    }
+    .tl { top: 22px; left: 22px; border-right: 0; border-bottom: 0; }
+    .tr { top: 22px; right: 22px; border-left: 0; border-bottom: 0; }
+    .bl { bottom: 22px; left: 22px; border-right: 0; border-top: 0; }
+    .br { bottom: 22px; right: 22px; border-left: 0; border-top: 0; }
+    .strip {
+      position: absolute;
+      left: 50%;
+      top: 28px;
+      transform: translateX(-50%);
+      display: flex;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .strip-cell {
+      min-width: 168px;
+      padding: 10px 22px;
+      text-align: center;
+      border-right: 1px solid var(--line);
+    }
+    .strip-cell:last-child { border-right: 0; }
+    .strip-cell span { display: block; font-family: "Manrope", sans-serif; font-size: 11px; letter-spacing: 0.32em; color: var(--muted); }
+    .strip-cell b { display: block; margin-top: 4px; font-size: 22px; letter-spacing: 0.12em; }
+    .feed {
+      position: absolute;
+      top: 140px;
+      left: 32px;
+      width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .feed-item {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 8px 12px;
+      font-size: 16px;
+    }
+    .feed-item em { color: var(--ember); font-style: normal; }
+    .status {
+      position: absolute;
+      left: 32px;
+      bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: "Manrope", sans-serif;
+      font-size: 12px;
+      letter-spacing: 0.28em;
+      color: var(--ember);
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ember);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .idle {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+    .idle .card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 36px 48px;
+    }
+
+    body.obs {
+      background: transparent !important;
+      display: block;
+      min-height: 1080px;
+    }
+    body.obs .dock, body.obs .veil { display: none !important; }
+    body.obs .preview { display: block; width: 1920px; height: 1080px; background: transparent; }
+    body.obs .stage-wrap { width: 1920px; height: 1080px; aspect-ratio: auto; }
+    body.obs .stage { transform: none !important; }
+
+    @media (max-width: 900px) {
+      body.studio { flex-direction: column; }
+      .dock { width: 100%; border-right: 0; border-top: 1px solid var(--line); order: 2; }
+      .preview { order: 1; min-height: 46vh; }
+    }
+  </style>
+</head>
+<body class="studio">
+  <aside class="dock" id="dock">
+    <div>
+      <p class="kicker">Dropframe</p>
+      <h1>Оверлей Apex</h1>
+      <p class="hint" style="margin-top:8px">Как Valorant Tracker: шаришь окно игры — читаю ранг, киллы, урон и киллфид с картинки.</p>
+    </div>
+    <button id="btnShare">Шарить окно Apex</button>
+    <button class="ghost" id="btnDemo">Прогнать демо-кадр</button>
+    <button class="ghost" id="btnObs">Режим OBS (прозрачный)</button>
+    <p class="hint" id="scanHint">Шарь окно Apex или прогони демо-кадр</p>
+    <div class="readout" id="readout"></div>
+    <p class="raw" id="raw"></p>
+    <label>Ник</label>
+    <input id="nick" value="QUANNEBEOI" />
+    <label>Ранг (если OCR не видит)</label>
+    <input id="rankIn" value="DIAMOND IV" />
+    <label>Легенда</label>
+    <input id="legendIn" value="WRAITH" />
+    <p class="hint">OBS: источник «Браузер», локальный файл, 1920×1080, прозрачный фон, в URL добавь <b>?obs=1</b></p>
+  </aside>
+  <section class="preview">
+    <div class="stage-wrap" id="wrap">
+      <div class="stage" id="stage"></div>
+    </div>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <script>
+    const RANK_NAMES = ["APEX PREDATOR","PREDATOR","MASTER","DIAMOND","PLATINUM","GOLD","SILVER","BRONZE","ROOKIE"];
+    const DIVS = ["IV","III","II","I","V"];
+    const LEGENDS = ["Wraith","Bangalore","Lifeline","Pathfinder","Gibraltar","Bloodhound","Mirage","Caustic","Octane","Wattson","Crypto","Revenant","Loba","Rampart","Horizon","Fuse","Valkyrie","Seer","Ash","Maggie","Newcastle","Vantage","Catalyst","Ballistic","Conduit","Alter","Sparrow"];
+    const MAPS = ["Broken Moon","World's Edge","Olympus"];
+    const SLOT = 4.5 * 60 * 60 * 1000;
+    const ANCHOR = Date.parse("2026-09-19T17:30:00-07:00");
+
+    const state = {
+      streamer: "QUANNEBEOI",
+      legend: "WRAITH",
+      rank: "DIAMOND IV",
+      kills: 0,
+      damage: 0,
+      placement: null,
+      rp: null,
+      feed: [],
+      elim: new Set(),
+      screenLive: false,
+      ocr: "idle",
+      lastRead: "",
+      armed: false,
+    };
+
+    const params = new URLSearchParams(location.search);
+    const obsMode = params.has("obs") || params.get("mode") === "obs";
+    if (obsMode) {
+      document.body.classList.remove("studio");
+      document.body.classList.add("obs");
+      state.armed = true;
+    }
+
+    let stream = null;
+    let video = null;
+    let worker = null;
+    let busy = false;
+
+    function clean(text) {
+      return text.replace(/[|]/g, "I").replace(/EL1M/gi, "ELIM").replace(/K1LLS/gi, "KILLS").replace(/\s+/g, " ").trim();
+    }
+    function pick(text, res) {
+      for (const re of res) {
+        const m = text.match(re);
+        if (m && m[1] && Number.isFinite(Number(m[1]))) return Number(m[1]);
+      }
+    }
+    function parseHud(raw) {
+      const text = clean(raw);
+      const upper = text.toUpperCase();
+      const out = {};
+      const kills = pick(upper, [/(?:KILLS?|ELIMS?|УБИЙСТВ[АО]?)[^\d]{0,8}(\d{1,3})/, /(\d{1,3})\s*(?:KILLS?|ELIMS?)/]);
+      if (kills !== undefined && kills <= 50) out.kills = kills;
+      const damage = pick(upper, [/(?:DAMAGE|DMG|УРОН)[^\d]{0,8}(\d{2,5})/, /(\d{2,5})\s*(?:DAMAGE|DMG)/]);
+      if (damage !== undefined && damage <= 20000) out.damage = damage;
+      const placement = pick(upper, [/#\s*(\d{1,2})\b/, /(?:PLACE(?:MENT)?|SQUAD|МЕСТО)[^\d]{0,8}(\d{1,2})/]);
+      if (placement >= 1 && placement <= 20) out.placement = placement;
+      const rp = pick(upper, [/(\d{1,4})\s*RP\b/]);
+      if (rp !== undefined && rp <= 9999) out.rp = rp;
+      for (const name of RANK_NAMES) {
+        const idx = upper.indexOf(name);
+        if (idx === -1) continue;
+        const slice = upper.slice(idx, idx + name.length + 8);
+        const div = DIVS.find((d) => new RegExp("\\b" + d + "\\b").test(slice.slice(name.length)));
+        out.rank = div && name !== "PREDATOR" && name !== "APEX PREDATOR" && name !== "MASTER" ? name + " " + div : name;
+        break;
+      }
+      const legend = LEGENDS.find((n) => new RegExp("\\b" + n + "\\b", "i").test(text));
+      if (legend) out.legend = legend.toUpperCase();
+      const feed = [];
+      const seen = new Set();
+      function push(actor, target, kind) {
+        const key = kind + ":" + actor + ":" + target;
+        if (seen.has(key)) return;
+        seen.add(key);
+        feed.push({ actor: actor.toUpperCase(), target: target.toUpperCase(), kind });
+      }
+      for (const m of upper.matchAll(/\b([A-Z0-9_\-]{2,16}|YOU|ME)\s+(?:ELIM(?:INATED)?|KILLED)\s+([A-Z0-9_\-]{2,16})\b/g)) push(m[1], m[2], "kill");
+      for (const m of upper.matchAll(/\b([A-Z0-9_\-]{2,16}|YOU|ME)\s+(?:DOWN(?:ED)?|KNOCK(?:ED)?)\s+([A-Z0-9_\-]{2,16})\b/g)) push(m[1], m[2], "knock");
+      if (feed.length) out.feed = feed.slice(0, 6);
+      return out;
+    }
+
+    function applyRead(read, raw) {
+      if (raw) state.lastRead = raw.slice(0, 400);
+      if (read.kills != null) state.kills = Math.max(state.kills, read.kills);
+      if (read.damage != null) state.damage = Math.max(state.damage, read.damage);
+      if (read.placement != null) state.placement = read.placement;
+      if (read.rp != null) state.rp = read.rp;
+      if (read.rank) state.rank = read.rank;
+      if (read.legend) state.legend = read.legend;
+      if (read.feed) {
+        for (const f of read.feed) {
+          if (f.kind === "kill" && (f.actor === state.streamer || f.actor === "YOU" || f.actor === "ME")) {
+            state.elim.add(f.target);
+          }
+        }
+        state.kills = Math.max(state.kills, state.elim.size);
+        const merged = [...read.feed, ...state.feed];
+        const uniq = [];
+        const keys = new Set();
+        for (const f of merged) {
+          const k = f.kind + f.actor + f.target;
+          if (keys.has(k)) continue;
+          keys.add(k);
+          uniq.push(f);
+        }
+        state.feed = uniq.slice(0, 6);
+      }
+      state.ocr = "ready";
+      state.armed = true;
+      render();
+    }
+
+    function rotation() {
+      const elapsed = ((Date.now() - ANCHOR) % (SLOT * MAPS.length) + SLOT * MAPS.length) % (SLOT * MAPS.length);
+      const idx = Math.floor(elapsed / SLOT);
+      const remain = SLOT - (elapsed % SLOT);
+      const total = Math.max(0, Math.floor(remain / 1000));
+      const h = Math.floor(total / 3600);
+      const m = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
+      const s = String(total % 60).padStart(2, "0");
+      return { current: MAPS[idx], next: MAPS[(idx + 1) % MAPS.length], remain: h > 0 ? h + ":" + m + ":" + s : m + ":" + s };
+    }
+
+    function scaleStage() {
+      const wrap = document.getElementById("wrap");
+      const stage = document.getElementById("stage");
+      if (!wrap || !stage || document.body.classList.contains("obs")) return;
+      const r = wrap.getBoundingClientRect();
+      const k = Math.min(r.width / 1920, r.height / 1080);
+      stage.style.transform = "scale(" + k + ")";
+    }
+
+    function render() {
+      const rot = rotation();
+      const stage = document.getElementById("stage");
+      const liveVideo = state.screenLive ? '<video class="bg-video" id="hudVideo" muted playsinline autoplay></video>' : "";
+      const feed = state.feed.map((f) =>
+        '<div class="feed-item"><em>' + f.actor + "</em> " + (f.kind === "kill" ? "ELIM" : "DOWN") + " " + f.target + "</div>"
+      ).join("");
+      const hud = state.armed
+        ? `<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+           <div class="strip">
+             <div class="strip-cell"><span>Rank</span><b>${state.rank}</b></div>
+             <div class="strip-cell"><span>Legend</span><b>${state.legend}</b></div>
+             <div class="strip-cell"><span>Kills</span><b>${state.kills}</b></div>
+             <div class="strip-cell"><span>Damage</span><b>${state.damage}</b></div>
+             <div class="strip-cell"><span>Place</span><b>${state.placement ? "#" + state.placement : "—"}</b></div>
+           </div>
+           <div class="feed">${feed}</div>
+           <div class="status"><i class="dot"></i>${state.screenLive ? (state.ocr === "reading" ? "OCR // READ" : "HUD // TRACK") : rot.current + " · " + rot.remain}</div>`
+        : `<div class="idle"><div class="card"><div class="kicker">Dropframe tracker</div><h1 style="margin-top:8px">${rot.current}</h1><p class="hint" style="margin-top:12px;text-transform:none;letter-spacing:0">Шаришь окно игры — оверлей читает ранг, киллы и урон с кадра.</p></div></div>`;
+      stage.innerHTML = liveVideo + (state.screenLive ? '<div class="veil"></div>' : "") + hud;
+
+      if (state.screenLive && video) {
+        const el = document.getElementById("hudVideo");
+        if (el) {
+          el.srcObject = video.srcObject;
+          el.play().catch(() => {});
+        }
+      }
+
+      const readout = document.getElementById("readout");
+      if (readout) {
+        const cells = [
+          ["Ранг", state.rank],
+          ["Легенда", state.legend],
+          ["Киллы", String(state.kills)],
+          ["Урон", String(state.damage)],
+          ["Место", state.placement ? "#" + state.placement : "—"],
+          ["RP", state.rp == null ? "—" : String(state.rp)],
+        ];
+        readout.innerHTML = cells.map(([k, v]) => `<div class="cell"><span>${k}</span><b>${v}</b></div>`).join("");
+      }
+      const hint = document.getElementById("scanHint");
+      if (hint) {
+        hint.textContent =
+          state.ocr === "reading" ? "Читаю кадр…" :
+          state.ocr === "ready" ? "HUD прочитан с экрана" :
+          state.ocr === "error" ? "Ошибка чтения" :
+          "Шарь окно Apex или прогони демо-кадр";
+      }
+      const raw = document.getElementById("raw");
+      if (raw) raw.textContent = state.lastRead;
+      const share = document.getElementById("btnShare");
+      if (share) {
+        share.textContent = state.screenLive ? "Отключить экран" : "Шарить окно Apex";
+        share.className = state.screenLive ? "danger" : "";
+      }
+      scaleStage();
+    }
+
+    function ensureVideo() {
+      if (video) return video;
+      video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      return video;
+    }
+
+    function stopCapture() {
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      if (video) video.srcObject = null;
+      state.screenLive = false;
+      render();
+    }
+
+    async function getWorker() {
+      if (worker) return worker;
+      worker = await Tesseract.createWorker("eng", 1, {
+        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
+        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.0/tesseract-core.wasm.js",
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      });
+      await worker.setParameters({ tessedit_pageseg_mode: "11" });
+      return worker;
+    }
+
+    function cropZones(src) {
+      const zones = [
+        { x: 0.01, y: 0.02, w: 0.3, h: 0.24 },
+        { x: 0.66, y: 0.03, w: 0.33, h: 0.34 },
+        { x: 0.68, y: 0.66, w: 0.3, h: 0.28 },
+        { x: 0.2, y: 0.36, w: 0.6, h: 0.2 },
+      ];
+      return zones.map((z) => {
+        const sx = Math.floor(z.x * src.width);
+        const sy = Math.floor(z.y * src.height);
+        const sw = Math.max(8, Math.floor(z.w * src.width));
+        const sh = Math.max(8, Math.floor(z.h * src.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(sw * 2.2);
+        c.height = Math.round(sh * 2.2);
+        const ctx = c.getContext("2d");
+        ctx.filter = "grayscale(1) contrast(1.6) brightness(1.12)";
+        ctx.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+        const img = ctx.getImageData(0, 0, c.width, c.height);
+        const d = img.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+          const v = y > 148 ? 255 : 0;
+          d[i] = d[i + 1] = d[i + 2] = v;
+        }
+        ctx.putImageData(img, 0, 0);
+        return c;
+      });
+    }
+
+    async function readHud(canvas) {
+      const w = await getWorker();
+      const chunks = [];
+      for (const tile of cropZones(canvas)) {
+        const r = await w.recognize(tile);
+        const t = (r.data.text || "").trim();
+        if (t) chunks.push(t);
+      }
+      if (chunks.length) return chunks.join("\n");
+      return ((await w.recognize(canvas)).data.text || "");
+    }
+
+    function grabFrame() {
+      const v = video;
+      if (!v || v.readyState < 2 || v.videoWidth < 8) return null;
+      const scale = Math.min(1, 1600 / v.videoWidth);
+      const c = document.createElement("canvas");
+      c.width = Math.round(v.videoWidth * scale);
+      c.height = Math.round(v.videoHeight * scale);
+      c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+      return c;
+    }
+
+    function makeSample() {
+      const c = document.createElement("canvas");
+      c.width = 1920;
+      c.height = 1080;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#16110d";
+      ctx.fillRect(0, 0, 1920, 1080);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 56px sans-serif";
+      ctx.fillText("WRAITH", 64, 120);
+      ctx.font = "700 40px sans-serif";
+      ctx.fillText("DIAMOND IV", 64, 180);
+      ctx.font = "600 36px sans-serif";
+      ctx.fillText("QUANNEBEOI ELIM KITE", 1320, 120);
+      ctx.fillText("PULSE DOWN HEXA", 1320, 180);
+      ctx.fillText("YOU ELIMINATED ROGUE", 1320, 240);
+      ctx.font = "700 48px sans-serif";
+      ctx.fillText("KILLS 7", 1360, 820);
+      ctx.fillText("DAMAGE 1840", 1360, 890);
+      ctx.fillText("#4 SQUAD", 1360, 960);
+      return c;
+    }
+
+    async function tickOcr() {
+      if (busy || !state.screenLive) return;
+      const frame = grabFrame();
+      if (!frame) return;
+      busy = true;
+      state.ocr = "reading";
+      render();
+      try {
+        const text = await readHud(frame);
+        applyRead(parseHud(text), text);
+      } catch (err) {
+        state.ocr = "error";
+        const hint = document.getElementById("scanHint");
+        if (hint) hint.textContent = err.message || "OCR failed";
+      } finally {
+        busy = false;
+      }
+    }
+
+    async function shareScreen() {
+      if (state.screenLive) {
+        stopCapture();
+        return;
+      }
+      state.ocr = "reading";
+      render();
+      try {
+        await getWorker();
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false });
+        const v = ensureVideo();
+        v.srcObject = stream;
+        await v.play();
+        stream.getVideoTracks()[0].addEventListener("ended", stopCapture);
+        state.screenLive = true;
+        state.armed = true;
+        state.ocr = "ready";
+        render();
+        tickOcr();
+      } catch (err) {
+        state.ocr = "error";
+        const hint = document.getElementById("scanHint");
+        if (hint) hint.textContent = err.message || "Не удалось шарить экран";
+      }
+    }
+
+    async function demo() {
+      state.ocr = "reading";
+      render();
+      try {
+        await getWorker();
+        const canvas = makeSample();
+        stopCapture();
+        stream = canvas.captureStream(4);
+        const v = ensureVideo();
+        v.srcObject = stream;
+        await v.play();
+        state.screenLive = true;
+        state.armed = true;
+        const text = await readHud(canvas);
+        applyRead(parseHud(text), text);
+      } catch (err) {
+        state.ocr = "error";
+        const hint = document.getElementById("scanHint");
+        if (hint) hint.textContent = err.message || "OCR не поднялся";
+      }
+    }
+
+    document.getElementById("btnShare").onclick = () => shareScreen();
+    document.getElementById("btnDemo").onclick = () => demo();
+    document.getElementById("btnObs").onclick = () => {
+      const url = new URL(location.href);
+      url.searchParams.set("obs", "1");
+      location.href = url.toString();
+    };
+    document.getElementById("nick").oninput = (e) => { state.streamer = e.target.value.toUpperCase(); render(); };
+    document.getElementById("rankIn").oninput = (e) => { state.rank = e.target.value; render(); };
+    document.getElementById("legendIn").oninput = (e) => { state.legend = e.target.value.toUpperCase(); render(); };
+
+    setInterval(() => { if (state.screenLive) tickOcr(); }, 2500);
+    setInterval(render, 1000);
+    window.addEventListener("resize", scaleStage);
+    render();
+    scaleStage();
+  </script>
+</body>
+</html>
